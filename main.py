@@ -1,5 +1,5 @@
 import numpy as np
-import cv2
+from PIL import Image
 import argparse
 from numba import cuda, types
 import math
@@ -14,7 +14,8 @@ parser.add_argument('--sobel', action='store_true', help='Perform all kernels up
 parser.add_argument('--threshold', action='store_true', help='Perform all kernels up to threshold_kernel')
 args = parser.parse_args()
 
-input_image = cv2.imread(args.inputImage)
+input_image = Image.open(args.inputImage).convert('RGB')
+input_array = np.array(input_image)
 if input_image is None:
     raise ValueError("Could not open or find the image specified.")
 
@@ -52,11 +53,12 @@ def hysteresis_kernel(edges, output_image):
     x, y = cuda.grid(2)
     pass
 
-output_image = np.zeros_like(input_image[:, :, 0], dtype=np.uint8)  # Create a grayscale output image buffer
+output_image = np.zeros((input_array.shape[0], input_array.shape[1]), dtype=np.uint8)
 
-blocks_per_grid, threads_per_block = compute_threads_and_blocks(input_image)
 
-d_input_image = cuda.to_device(input_image)
+blocks_per_grid, threads_per_block = compute_threads_and_blocks(input_array)
+
+d_input_image = cuda.to_device(input_array)
 d_output_image = cuda.device_array_like(output_image)
 
 if args.bw:
@@ -70,6 +72,6 @@ elif args.threshold:
 else:
     pass
 
-result_image = d_output_image.copy_to_host()
-cv2.imwrite(args.outputImage, result_image)
-cv2.cvtColor(result_image, cv2.COLOR_GRAY2BGR)
+result_array = d_output_image.copy_to_host()
+output_image = Image.fromarray(result_array)
+output_image.save(args.outputImage)
